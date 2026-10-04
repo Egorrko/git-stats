@@ -1,0 +1,12 @@
+{
+  "~/code/my-project": {
+    "base": "origin/main",
+    "authors": ["Your Name", "teammate"],
+    "excludes": [
+      "# строки с # — комментарии",
+      "*.lock", "package-lock.json",
+      "*.min.js", "*.map",
+      "node_modules/", "vendor/", "dist/"
+    ]
+  }
+}

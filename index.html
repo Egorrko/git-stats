@@ -1,0 +1,1434 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Git-статистика</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f3f2ee;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --hover: rgba(11,11,11,0.05);
+  --accent: #2a78d6;
+  --up: #006300;
+  --down: #d03b3b;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --other: #a8a69f;
+  --added: #008300;
+  --deleted: #e34948;
+  --heat-0: #ecebe6;
+  --heat-1: #b7d3f6; --heat-2: #86b6ef; --heat-3: #5598e7; --heat-4: #2a78d6; --heat-5: #1c5cab;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+    --text: #ffffff; --text-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835;
+    --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
+    --accent: #3987e5; --up: #0ca30c; --down: #e66767;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --other: #6b6a65; --added: #0ca30c; --deleted: #e66767;
+    --heat-0: #262624;
+    --heat-1: #104281; --heat-2: #1c5cab; --heat-3: #2a78d6; --heat-4: #5598e7; --heat-5: #9ec5f4;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+  --text: #ffffff; --text-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835;
+  --border: rgba(255,255,255,0.10); --hover: rgba(255,255,255,0.06);
+  --accent: #3987e5; --up: #0ca30c; --down: #e66767;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --other: #6b6a65; --added: #0ca30c; --deleted: #e66767;
+  --heat-0: #262624;
+  --heat-1: #104281; --heat-2: #1c5cab; --heat-3: #2a78d6; --heat-4: #5598e7; --heat-5: #9ec5f4;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 24px 24px 48px; }
+button, select, input, textarea { font: inherit; color: inherit; }
+
+/* Шапка */
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+.top h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.01em; }
+.top .path { color: var(--muted); font-size: 13px; word-break: break-all; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn {
+  height: 36px; padding: 0 14px; border-radius: 9px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface);
+  transition: background .15s, border-color .15s, transform .1s;
+}
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .55; cursor: progress; }
+.btn.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.08); background: var(--accent); }
+.btn .spin { display: inline-block; transition: transform .4s; }
+.btn.busy .spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Фильтры — одна строка над всеми графиками */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-end;
+  padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); margin-bottom: 10px;
+}
+.field { display: flex; flex-direction: column; gap: 4px; position: relative; min-width: 0; }
+.field[hidden] { display: none; }
+.field > span { font-size: 12px; color: var(--muted); }
+select, input[type=date] {
+  height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); max-width: 260px;
+}
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; padding: 2px; background: var(--surface-2); flex-wrap: wrap; }
+.seg button {
+  border: 0; background: transparent; height: 28px; padding: 0 10px; border-radius: 7px; cursor: pointer; color: var(--text-2);
+  transition: background .15s, color .15s;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed=true] { background: var(--surface); color: var(--text); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,.06); font-weight: 600; }
+.dates { display: flex; gap: 6px; align-items: center; }
+.pick {
+  height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+}
+.pick:hover { background: var(--surface-2); }
+.pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; min-width: 280px; max-width: 360px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.14);
+}
+.pop[hidden] { display: none; }
+.pop .list { max-height: 320px; overflow: auto; display: flex; flex-direction: column; }
+.pop label.row { display: flex; align-items: center; gap: 8px; padding: 6px 6px; border-radius: 7px; cursor: pointer; }
+.pop label.row:hover { background: var(--hover); }
+.pop .row .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.pop .row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop .row .ct { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.pop .search {
+  width: 100%; height: 32px; padding: 0 10px; margin-bottom: 6px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.pop .row .al { color: var(--muted); font-size: 11.5px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop .bar { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.pop textarea {
+  width: 100%; min-height: 200px; resize: vertical; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); padding: 8px; font: 12.5px/1.5 ui-monospace, "JetBrains Mono", monospace;
+}
+.pop .hint { font-size: 12px; color: var(--muted); margin: 6px 2px 8px; }
+.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 4px 2px; }
+.check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
+
+.status { font-size: 13px; color: var(--muted); margin: 0 4px 18px; min-height: 19px; }
+.status.err { color: var(--down); }
+
+main { transition: opacity .2s; }
+main.loading { opacity: .5; pointer-events: none; }
+
+/* Показатели */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px 12px; }
+.tile .lb { font-size: 12.5px; color: var(--text-2); }
+.tile .vl { font-size: 28px; font-weight: 650; letter-spacing: -0.02em; margin: 2px 0 2px; white-space: nowrap; }
+.tile .dl { font-size: 12.5px; color: var(--muted); }
+.tile .dl.up { color: var(--up); }
+.tile .dl.down { color: var(--down); }
+.tile .sb { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* Карточки графиков */
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px 14px; min-width: 0; }
+.card.wide { grid-column: 1 / -1; }
+.card[hidden] { display: none; }
+.card header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+.card h2 { margin: 0; font-size: 15.5px; font-weight: 620; }
+.card .sub { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.card .tools { display: flex; gap: 4px; flex: none; }
+.card .tools button {
+  border: 1px solid transparent; background: none; color: var(--muted); font-size: 12px; height: 26px; padding: 0 8px;
+  border-radius: 7px; cursor: pointer; transition: background .15s, color .15s;
+}
+.card .tools button:hover { background: var(--hover); color: var(--text); }
+.card .tools button[aria-pressed=true] { color: var(--text); border-color: var(--border); }
+.card .tools .modes { display: inline-flex; gap: 2px; margin-right: 6px; }
+.card .tools .modes:empty { display: none; }
+.card .tools .modes button[aria-pressed=true] { background: var(--surface-2); font-weight: 600; }
+.card header { flex-wrap: wrap; }
+.chart { width: 100%; min-height: 40px; }
+.chart svg { display: block; overflow: visible; }
+.empty { color: var(--muted); padding: 40px 0; text-align: center; }
+.tablewrap { max-height: 420px; overflow: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--surface); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.subj { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.hash { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
+.plus { color: var(--up); } .minus { color: var(--down); }
+
+/* Подсказка */
+#tip {
+  position: fixed; z-index: 50; pointer-events: none; min-width: 140px; max-width: 320px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.16); font-size: 12.5px;
+}
+#tip[hidden] { display: none; }
+#tip .tt { color: var(--text-2); margin-bottom: 4px; }
+#tip .tr { display: flex; align-items: center; gap: 8px; }
+#tip .key { width: 12px; height: 2px; border-radius: 1px; flex: none; }
+#tip .tv { font-weight: 650; font-variant-numeric: tabular-nums; }
+#tip .tl { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .wrap { padding: 16px 16px 40px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1 id="title">Git-статистика</h1>
+      <div class="path" id="repoPath"></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="refresh" title="Перечитать коммиты из git"><span class="spin">↻</span> Обновить</button>
+      <button class="btn" id="summaryPng" title="Картинка-сводка, чтобы скинуть друзьям">Сводка PNG</button>
+      <button class="btn" id="theme">Тема: авто</button>
+    </div>
+  </header>
+
+  <section class="filters" aria-label="Фильтры">
+    <label class="field"><span>Репозиторий</span><select id="repo"></select></label>
+    <label class="field"><span>Ветка</span><select id="rev"></select></label>
+    <label class="field" title="Коммиты из этой ветки не считаются — например, апстрим форка"><span>Без коммитов из</span><select id="base"></select></label>
+    <div class="field"><span>Период</span>
+      <div class="seg" id="presets">
+        <button data-p="7d">Неделя</button><button data-p="30d">Месяц</button><button data-p="90d">3 месяца</button><button data-p="365d">Год</button><button data-p="all">Всё время</button><button data-p="custom">Свой</button>
+      </div>
+    </div>
+    <div class="field" id="customRange" hidden><span>С — по</span>
+      <div class="dates"><input type="date" id="from"><span>—</span><input type="date" id="to"></div>
+    </div>
+    <label class="field"><span>Шаг</span>
+      <select id="gran"><option value="auto">Авто</option><option value="day">По дням</option><option value="week">По неделям</option><option value="month">По месяцам</option></select>
+    </label>
+    <div class="field"><span>Авторы</span>
+      <button class="pick" id="authorsBtn">Все</button>
+      <div class="pop" id="authorsPop" hidden>
+        <input class="search" id="authorsSearch" type="search" placeholder="Найти автора" autocomplete="off">
+        <div class="list" id="authorsList"></div>
+        <label class="check" style="margin-top:8px"><input type="checkbox" id="bots"> Показывать ботов (dependabot и т.п.)</label>
+        <div class="bar"><button class="link" id="authorsAll">Сбросить — все</button><button class="link" id="authorsClose">Готово</button></div>
+      </div>
+    </div>
+    <label class="field"><span>Считать строки</span>
+      <select id="kind"><option value="all">Все файлы</option><option value="code">Только код</option><option value="docs">Только доки</option></select>
+    </label>
+    <div class="field"><span>Файлы</span>
+      <button class="pick" id="excludeBtn">Исключения</button>
+      <div class="pop" id="excludePop" hidden>
+        <div class="hint">Эти файлы не считаются в строках. По одному шаблону на строку: <code>*.lock</code>, <code>priv/static/</code>, <code>assets/**/*.svg</code>.</div>
+        <textarea id="excludes" spellcheck="false"></textarea>
+        <label class="check" style="margin-top:8px"><input type="checkbox" id="merges"> Считать мерджи коммитами</label>
+        <div class="bar"><button class="link" id="excludesReset">По умолчанию</button><button class="link" id="excludesApply">Применить</button></div>
+      </div>
+    </div>
+  </section>
+  <div class="status" id="status"></div>
+
+  <main id="main">
+    <section class="kpis" id="kpis"></section>
+    <section class="grid" id="grid"></section>
+  </main>
+</div>
+<div id="tip" hidden></div>
+
+<script>
+const DEFAULT_EXCLUDES = [
+  '*.lock', '*-lock.json', '*-lock.yaml', 'package-lock.json',
+  '*.min.js', '*.min.css', '*.map',
+  'node_modules/', 'deps/', 'vendor/', 'dist/', 'priv/static/',
+].join('\n');
+const AI_RE = /claude|copilot|cursor|codex|gemini|devin|aider|chatgpt|openai|anthropic|jules/i;
+const MONTHS = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+const MONTHS_FULL = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+const DOW = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const PRESET_DAYS = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
+const LANG = {
+  ex:'Elixir', exs:'Elixir', heex:'HEEx', eex:'EEx', leex:'EEx', erl:'Erlang', hrl:'Erlang',
+  js:'JavaScript', mjs:'JavaScript', cjs:'JavaScript', jsx:'JavaScript', ts:'TypeScript', tsx:'TypeScript',
+  vue:'Vue', svelte:'Svelte', css:'CSS', scss:'SCSS', sass:'SCSS', html:'HTML', md:'Markdown',
+  py:'Python', rs:'Rust', go:'Go', rb:'Ruby', java:'Java', kt:'Kotlin', swift:'Swift', dart:'Dart', zig:'Zig',
+  c:'C', h:'C', cpp:'C++', hpp:'C++', cc:'C++', cs:'C#', php:'PHP', lua:'Lua',
+  sh:'Shell', bash:'Shell', fish:'Shell', zsh:'Shell', sql:'SQL', json:'JSON', yml:'YAML', yaml:'YAML',
+  toml:'TOML', xml:'XML', svg:'SVG', glsl:'GLSL', frag:'GLSL', vert:'GLSL', wgsl:'WGSL', nix:'Nix',
+};
+
+const $ = (s, el = document) => el.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+const FONT = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+const nf = new Intl.NumberFormat('ru-RU');
+const cf = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 });
+const fmt = n => nf.format(Math.round(n));
+const compact = n => (n < 0 ? '−' : '') + cf.format(Math.abs(n));
+const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + fmt(Math.abs(n));
+const pad2 = n => String(n).padStart(2, '0');
+function plural(n, [one, few, many]) {
+  const a = Math.abs(n) % 100, b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b === 1) return one;
+  if (b >= 2 && b <= 4) return few;
+  return many;
+}
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+/* ---------- даты: строки YYYY-MM-DD, арифметика в UTC ---------- */
+const ms = d => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+const addDays = (d, n) => new Date(ms(d) + n * 864e5).toISOString().slice(0, 10);
+const daysBetween = (a, b) => Math.round((ms(b) - ms(a)) / 864e5);
+const dowOf = d => (new Date(ms(d)).getUTCDay() + 6) % 7;
+const weekStart = d => addDays(d, -dowOf(d));
+function today() { const t = new Date(); return `${t.getFullYear()}-${pad2(t.getMonth() + 1)}-${pad2(t.getDate())}`; }
+const dayShort = d => `${+d.slice(8, 10)} ${MONTHS[+d.slice(5, 7) - 1]}`;
+const dayFull = d => `${dayShort(d)} ${d.slice(0, 4)}`;
+
+/* ---------- состояние (в адресе — чтобы ссылка открывала тот же вид) ---------- */
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+const state = (() => {
+  const p = new URLSearchParams(location.hash.slice(1));
+  return {
+    repo: p.get('repo'),
+    rev: p.get('rev') || 'HEAD',
+    preset: p.get('p') || '90d',
+    from: p.get('from') || '',
+    to: p.get('to') || '',
+    gran: p.get('g') || 'auto',
+    base: p.get('b') || '',
+    authors: p.get('a') ? p.get('a').split('|') : [],
+    merges: p.get('m') === '1',
+    bots: p.get('bots') === '1',
+    kind: p.get('k') || 'all',
+    excludes: DEFAULT_EXCLUDES,
+    // что пришло в адресе — настройки репозитория из repos.json это не перебивают
+    fromUrl: { base: p.has('b'), authors: p.has('a') },
+  };
+})();
+const excludesKey = repo => 'gitstats.excludes:' + repo;
+function saveState() {
+  const p = new URLSearchParams();
+  if (state.repo) p.set('repo', state.repo);
+  if (state.rev !== 'HEAD') p.set('rev', state.rev);
+  p.set('p', state.preset);
+  if (state.preset === 'custom') { p.set('from', state.from); p.set('to', state.to); }
+  if (state.gran !== 'auto') p.set('g', state.gran);
+  p.set('b', state.base);
+  p.set('a', state.authors.join('|'));
+  if (state.merges) p.set('m', '1');
+  if (state.bots) p.set('bots', '1');
+  if (state.kind !== 'all') p.set('k', state.kind);
+  history.replaceState(null, '', '#' + p.toString());
+}
+
+let DATA = null;
+let LAST = null;
+
+async function api(url) {
+  const res = await fetch(url);
+  const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok || body.error) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+}
+const q = encodeURIComponent;
+
+/* ---------- данные ---------- */
+const BOT_RE = /\[bot\]|^dependabot|^renovate|github-actions|^snyk|^greenkeeper/i;
+// Общие адреса, по которым нельзя склеивать разных людей
+const SHARED_EMAIL_RE = /^(noreply@github\.com|.*@localhost.*|root@.*|nobody@.*|)$/i;
+
+// Один человек под разными именами и почтами → одно имя: склеиваем всё,
+// что связано общим именем или общей почтой, и берём самое частое имя.
+function mergeIdentities(commits) {
+  const parent = new Map();
+  const find = k => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
+  const add = k => { if (!parent.has(k)) parent.set(k, k); return k; };
+  const union = (a, b) => { const ra = find(add(a)), rb = find(add(b)); if (ra !== rb) parent.set(ra, rb); };
+  for (const c of commits) {
+    const n = 'n:' + c.name.trim().toLowerCase();
+    add(n);
+    if (!SHARED_EMAIL_RE.test(c.email)) union(n, 'e:' + c.email.toLowerCase());
+  }
+  const names = new Map();   // корень → Map(имя → коммитов)
+  const aliases = new Map(); // корень → Set("имя <почта>")
+  for (const c of commits) {
+    const root = find('n:' + c.name.trim().toLowerCase());
+    if (!names.has(root)) { names.set(root, new Map()); aliases.set(root, new Set()); }
+    names.get(root).set(c.name, (names.get(root).get(c.name) || 0) + 1);
+    aliases.get(root).add(`${c.name} <${c.email}>`);
+    c.root = root;
+  }
+  const canonical = new Map([...names].map(([root, m]) => [root, [...m].sort((a, b) => b[1] - a[1])[0][0]]));
+  const aliasOf = new Map();
+  for (const c of commits) {
+    c.rawName = c.name;
+    c.name = canonical.get(c.root);
+    aliasOf.set(c.name, aliases.get(c.root));
+  }
+  return aliasOf;
+}
+
+function prepare(raw) {
+  const commits = raw.commits.map(([h, merge, name, email, date, subj, co, files]) => {
+    const day = date.slice(0, 10);
+    return { h, merge, name, email, date, day, hour: +date.slice(11, 13), dow: dowOf(day), subj, co,
+             bot: BOT_RE.test(name) || BOT_RE.test(email),
+             ai: AI_RE.test(name) || co.some(c => AI_RE.test(c)), files, add: 0, del: 0 };
+  });
+  const aliases = mergeIdentities(commits);
+  const counts = new Map();
+  for (const c of commits) counts.set(c.name, (counts.get(c.name) || 0) + 1);
+  const authors = [...counts].sort((a, b) => b[1] - a[1])
+    .map(([name, n]) => ({ name, n, aliases: aliases.get(name), bot: BOT_RE.test(name) }));
+  const days = commits.map(c => c.day).sort();
+  DATA = { raw, paths: raw.paths, commits, authors, slot: new Map(),
+           firstDay: days[0], lastDay: days[days.length - 1] };
+  state.authors = state.authors.filter(a => counts.has(a));
+  assignSlots();
+  applyExcludes();
+}
+
+// Цвета: сперва выбранным авторам, потом остальным — по числу коммитов во всей
+// загруженной истории, а не в текущем периоде, чтобы смена периода не перекрашивала.
+function assignSlots() {
+  const chosen = new Set(state.authors);
+  const order = [...DATA.authors.filter(a => chosen.has(a.name)), ...DATA.authors.filter(a => !chosen.has(a.name) && !a.bot)];
+  DATA.slot = new Map(order.slice(0, 7).map((a, i) => [a.name, i]));
+}
+
+const DOCS_RE = /\.(md|mdx|rst|txt|adoc|org)$/i;
+const DATA_RE = /\.(json|ya?ml|toml|csv|tsv|xml|svg|snap|ini|lock|po|pot)$/i;
+const kindOfPath = p => DOCS_RE.test(p) ? 'docs' : DATA_RE.test(p) ? 'data' : 'code';
+
+function compileGlob(pat) {
+  const dir = pat.endsWith('/');
+  let body = pat.replace(/\/+$/, '');
+  const anchored = body.startsWith('/');
+  body = body.replace(/^\/+/, '');
+  const esc = s => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+  const re = body.split('**').map(part => part.split('*').map(esc).join('[^/]*')).join('.*').replace(/\.\*\//g, '(.*/)?');
+  if (dir) { const r = new RegExp((anchored ? '^' : '(^|/)') + re + '/'); return p => r.test(p); }
+  if (!body.includes('/')) { const r = new RegExp('^' + re + '$'); return p => r.test(p.slice(p.lastIndexOf('/') + 1)); }
+  const r = new RegExp((anchored ? '^' : '(^|/)') + re + '$');
+  return p => r.test(p);
+}
+function applyExcludes() {
+  const tests = state.excludes.split('\n').map(s => s.trim()).filter(s => s && !s.startsWith('#')).map(compileGlob);
+  DATA.kind = DATA.paths.map(kindOfPath);
+  // excluded — мусор по шаблонам; mask — всё, что сейчас не считается (мусор + чужой вид файлов)
+  DATA.excluded = DATA.paths.map(p => tests.some(t => t(p)));
+  DATA.mask = DATA.paths.map((p, i) => DATA.excluded[i] || (state.kind !== 'all' && DATA.kind[i] !== state.kind));
+  for (const c of DATA.commits) {
+    c.add = c.del = c.exAdd = c.codeAdd = c.docsAdd = 0;
+    for (const [i, a, d] of c.files) {
+      if (DATA.excluded[i]) { c.exAdd += a; continue; }
+      if (DATA.kind[i] === 'code') c.codeAdd += a;
+      else if (DATA.kind[i] === 'docs') c.docsAdd += a;
+      if (!DATA.mask[i]) { c.add += a; c.del += d; }
+    }
+  }
+}
+
+function currentRange() {
+  const t = today();
+  if (state.preset === 'custom') {
+    let start = state.from || DATA.firstDay || t, end = state.to || t;
+    if (start > end) [start, end] = [end, start];
+    return { start, end };
+  }
+  if (state.preset === 'all') return { start: DATA.firstDay || t, end: t > (DATA.lastDay || t) ? t : DATA.lastDay };
+  return { start: addDays(t, -(PRESET_DAYS[state.preset] - 1)), end: t };
+}
+function granularity(r) {
+  if (state.gran !== 'auto') return state.gran;
+  const span = daysBetween(r.start, r.end) + 1;
+  return span <= 62 ? 'day' : span <= 400 ? 'week' : 'month';
+}
+function select(r) {
+  const who = state.authors.length ? new Set(state.authors) : null;
+  return DATA.commits.filter(c => c.day >= r.start && c.day <= r.end && (!who || who.has(c.name))
+    && (state.merges || !c.merge) && (state.bots || who || !c.bot));
+}
+function stats(list, r) {
+  const days = new Set(list.map(c => c.day));
+  const files = new Set();
+  let add = 0, del = 0, exAdd = 0, ai = 0;
+  for (const c of list) {
+    add += c.add; del += c.del; exAdd += c.exAdd; if (c.ai) ai++;
+    for (const [i] of c.files) if (!DATA.mask[i]) files.add(i);
+  }
+  const sorted = [...days].sort();
+  let best = 0, run = 0, prev = null;
+  for (const d of sorted) { run = prev && daysBetween(prev, d) === 1 ? run + 1 : 1; best = Math.max(best, run); prev = d; }
+  let current = 0;
+  for (let d = r.end; days.has(d); d = addDays(d, -1)) current++;
+  if (!current && days.has(addDays(r.end, -1))) for (let d = addDays(r.end, -1); days.has(d); d = addDays(d, -1)) current++;
+  return { commits: list.length, add, del, exAdd, net: add - del, days: days.size, span: daysBetween(r.start, r.end) + 1,
+           best, current, ai, files: files.size };
+}
+
+/* ---------- корзины по времени ---------- */
+const bucketOf = (d, g) => g === 'day' ? d : g === 'week' ? weekStart(d) : d.slice(0, 7);
+function nextBucket(k, g) {
+  if (g === 'day') return addDays(k, 1);
+  if (g === 'week') return addDays(k, 7);
+  let [y, m] = k.split('-').map(Number);
+  m++; if (m > 12) { m = 1; y++; }
+  return `${y}-${pad2(m)}`;
+}
+function buckets(r, g) {
+  const out = [], end = bucketOf(r.end, g);
+  for (let k = bucketOf(r.start, g); k <= end; k = nextBucket(k, g)) out.push(k);
+  return out;
+}
+function bucketLabel(k, g, i, keys) {
+  if (g === 'month') {
+    const m = MONTHS[+k.slice(5, 7) - 1];
+    return (i === 0 || k.slice(5, 7) === '01' || keys[i - 1].slice(0, 4) !== k.slice(0, 4)) ? `${m} ’${k.slice(2, 4)}` : m;
+  }
+  return dayShort(k);
+}
+function bucketTip(k, g) {
+  if (g === 'month') return `${MONTHS_FULL[+k.slice(5, 7) - 1]} ${k.slice(0, 4)}`;
+  if (g === 'week') return `неделя ${dayShort(k)} — ${dayFull(addDays(k, 6))}`;
+  return `${DOW[dowOf(k)]}, ${dayFull(k)}`;
+}
+const GRAN_WORD = { day: 'по дням', week: 'по неделям', month: 'по месяцам' };
+
+/* ---------- SVG-помощники: цвета подставляются значениями, чтобы PNG-экспорт был автономным ---------- */
+function S(tag, attrs = {}, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) if (attrs[k] != null) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function T(parent, x, y, text, attrs = {}) {
+  const t = S('text', { x, y, fill: css('--muted'), 'font-size': 11.5, ...attrs }, parent);
+  t.textContent = text;
+  return t;
+}
+function newSvg(box, w, h) {
+  const svg = S('svg', { xmlns: NS, width: w, height: h, viewBox: `0 0 ${w} ${h}`, 'font-family': FONT });
+  box.replaceChildren(svg);
+  svg.addEventListener('pointerleave', hideTip);
+  return svg;
+}
+function niceStep(raw) {
+  if (raw <= 1) return 1;
+  const p = 10 ** Math.floor(Math.log10(raw)), f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+function barPath(x, y, w, h, end) {
+  const r = end ? Math.min(4, w / 2, end === 'right' ? w : h) : 0;
+  if (!r) return `M${x},${y}h${w}v${h}h${-w}Z`;
+  if (end === 'top') return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  if (end === 'bottom') return `M${x},${y}H${x + w}V${y + h - r}Q${x + w},${y + h} ${x + w - r},${y + h}H${x + r}Q${x},${y + h} ${x},${y + h - r}Z`;
+  const rr = Math.min(4, h / 2, w);
+  return `M${x},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h - rr}Q${x + w},${y + h} ${x + w - rr},${y + h}H${x}Z`;
+}
+// Раскладка легенды заранее (ширина текста — оценкой), чтобы знать её высоту до рисования
+function legendLayout(items, x, W) {
+  let cx = x, row = 0;
+  const pos = items.map(it => {
+    const w = (it.kind === 'line' ? 19 : 17) + it.name.length * 6.9 + 16;
+    if (cx + w > W && cx > x) { cx = x; row++; }
+    const p = { x: cx, row }; cx += w; return p;
+  });
+  return { pos, height: items.length ? (row + 1) * 20 + 6 : 0 };
+}
+function legend(svg, items, layout, y) {
+  items.forEach((it, i) => {
+    const { x: cx, row } = layout.pos[i], yy = y + row * 20;
+    if (it.kind === 'line') S('rect', { x: cx, y: yy + 5, width: 14, height: 2, rx: 1, fill: it.color }, svg);
+    else S('rect', { x: cx, y: yy, width: 12, height: 12, rx: 3, fill: it.color }, svg);
+    T(svg, cx + (it.kind === 'line' ? 19 : 17), yy + 10.5, it.name, { fill: css('--text-2'), 'font-size': 12 });
+  });
+}
+const leftFor = ticks => 16 + Math.max(...ticks.map(v => compact(v).length)) * 6.6;
+function yGrid(svg, m, W, ticks, y) {
+  for (const v of ticks) {
+    const yy = Math.round(y(v)) + 0.5;
+    S('line', { x1: m.l, x2: W - m.r, y1: yy, y2: yy, stroke: v === 0 ? css('--axis') : css('--grid'), 'stroke-width': 1 }, svg);
+    T(svg, m.l - 8, yy + 4, compact(v), { 'text-anchor': 'end', 'font-variant-numeric': 'tabular-nums' });
+  }
+}
+function xLabels(svg, labels, xAt, m, W, H) {
+  const n = labels.length, pw = W - m.l - m.r;
+  const every = Math.ceil(n / Math.max(1, Math.floor(pw / 64)));
+  for (let i = 0; i < n; i += every) {
+    const cx = xAt(i);
+    let anchor = 'middle', x = cx;
+    if (cx - 26 < 0) { anchor = 'start'; x = Math.max(0, cx - 6); }
+    if (cx + 26 > W) { anchor = 'end'; x = Math.min(W, cx + 6); }
+    T(svg, x, H - 8, labels[i], { 'text-anchor': anchor });
+  }
+}
+
+/* ---------- подсказка ---------- */
+const tip = $('#tip');
+function showTip(evt, title, rows) {
+  tip.replaceChildren();
+  const t = document.createElement('div'); t.className = 'tt'; t.textContent = title; tip.appendChild(t);
+  for (const r of rows) {
+    const row = document.createElement('div'); row.className = 'tr';
+    if (r.color) { const k = document.createElement('span'); k.className = 'key'; k.style.background = r.color; row.appendChild(k); }
+    const v = document.createElement('span'); v.className = 'tv'; v.textContent = r.value; row.appendChild(v);
+    if (r.label) { const l = document.createElement('span'); l.className = 'tl'; l.textContent = r.label; row.appendChild(l); }
+    tip.appendChild(row);
+  }
+  tip.hidden = false;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = evt.clientX + 14, y = evt.clientY + 14;
+  if (x + w > innerWidth - 8) x = evt.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = evt.clientY - h - 14;
+  tip.style.left = Math.max(8, x) + 'px';
+  tip.style.top = Math.max(8, y) + 'px';
+}
+function hideTip() { tip.hidden = true; }
+
+/* ---------- графики ---------- */
+function columnChart(box, { labels, tips, series, unit = '', peak = true }) {
+  const W = Math.max(280, box.clientWidth), hasLegend = series.length > 1;
+  const legItems = series.map(s => ({ name: s.name, color: s.color, kind: 'rect' }));
+  const lay = legendLayout(hasLegend ? legItems : [], 52, W);
+  const H = 250 + lay.height;
+  const n = labels.length;
+  const pos = Array(n).fill(0), neg = Array(n).fill(0);
+  for (const s of series) s.values.forEach((v, i) => { (s.sign < 0 ? neg : pos)[i] += v; });
+  const maxP = Math.max(0, ...pos), maxN = Math.max(0, ...neg);
+  const step = niceStep((maxP + maxN) / 4 || 1);
+  const top = Math.ceil(maxP / step) * step || (maxN ? 0 : step), bot = Math.ceil(maxN / step) * step;
+  const ticks = []; for (let v = -bot; v <= top + 1e-9; v += step) ticks.push(v);
+  const m = { t: 22 + lay.height, r: 6, b: 28, l: leftFor(ticks) };
+  const svg = newSvg(box, W, H);
+  if (hasLegend) legend(svg, legItems, legendLayout(legItems, m.l, W), 2);
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const y = v => m.t + (top - v) / (top + bot) * ph;
+  yGrid(svg, m, W, ticks, y);
+
+  const band = pw / n, bw = Math.max(1, Math.min(24, band * 0.7));
+  const hover = S('rect', { x: m.l, y: m.t, width: band, height: ph, fill: css('--hover'), opacity: 0, rx: 4 }, svg);
+  const marks = S('g', {}, svg);
+  for (let i = 0; i < n; i++) {
+    const x = m.l + band * i + (band - bw) / 2;
+    for (const dir of [1, -1]) {
+      const stack = series.filter(s => (s.sign < 0 ? -1 : 1) === dir && s.values[i] > 0);
+      let acc = 0;
+      stack.forEach((s, j) => {
+        const y0 = y(dir * acc), y1 = y(dir * (acc + s.values[i]));
+        acc += s.values[i];
+        let a = Math.min(y0, y1), b = Math.max(y0, y1);
+        if (j > 0) { if (dir > 0) b -= 2; else a += 2; }   // 2px зазор между сегментами
+        if (b - a < 1) { if (j > 0) return; if (dir > 0) a = b - 1; else b = a + 1; }
+        const end = j === stack.length - 1 ? (dir > 0 ? 'top' : 'bottom') : null;
+        S('path', { d: barPath(x, a, bw, b - a, end), fill: s.color }, marks);
+      });
+    }
+  }
+  if (peak && maxP > 0) {
+    const i = pos.indexOf(maxP), cx = m.l + band * (i + 0.5);
+    T(svg, Math.min(Math.max(cx, m.l + 16), W - 16), y(maxP) - 7, compact(maxP) + unit,
+      { 'text-anchor': 'middle', fill: css('--text-2'), 'font-weight': 600 });
+  }
+  xLabels(svg, labels, i => m.l + band * (i + 0.5), m, W, H);
+
+  const hits = S('g', {}, svg);
+  for (let i = 0; i < n; i++) {
+    const r = S('rect', { x: m.l + band * i, y: m.t, width: band, height: ph, fill: 'transparent' }, hits);
+    r.addEventListener('pointermove', e => {
+      hover.setAttribute('x', m.l + band * i); hover.setAttribute('opacity', 1);
+      const rows = series.filter(s => series.length < 3 || s.values[i] > 0)
+        .map(s => ({ color: s.color, value: (s.sign < 0 && s.values[i] ? '−' : '') + fmt(s.values[i]), label: s.name }));
+      if (series.length > 1 && series.every(s => s.sign > 0)) rows.unshift({ value: fmt(pos[i]), label: 'всего' });
+      showTip(e, tips[i], rows);
+    });
+  }
+  svg.addEventListener('pointerleave', () => hover.setAttribute('opacity', 0));
+  return svg;
+}
+
+function lineChart(box, { labels, tips, series, area = true, endLabel = true, valueFmt = signed, sortTip = false }) {
+  const W = Math.max(280, box.clientWidth), hasLegend = series.length > 1;
+  const legItems = series.map(s => ({ name: s.name, color: s.color, kind: 'line' }));
+  const lay = legendLayout(hasLegend ? legItems : [], 56, W);
+  const H = 250 + lay.height;
+  const n = labels.length;
+  const all = series.flatMap(s => s.values);
+  const hi = Math.max(0, ...all), lo = Math.min(0, ...all);
+  const step = niceStep((hi - lo) / 4 || 1);
+  const top = Math.ceil(hi / step) * step || step, bottom = Math.floor(lo / step) * step;
+  const ticks = []; for (let v = bottom; v <= top + 1e-9; v += step) ticks.push(v);
+  const m = { t: 22 + lay.height, r: 14, b: 28, l: leftFor(ticks) };
+  const svg = newSvg(box, W, H);
+  if (hasLegend) legend(svg, legItems, legendLayout(legItems, m.l, W), 2);
+  const pw = W - m.l - m.r, ph = H - m.t - m.b;
+  const y = v => m.t + (top - v) / (top - bottom) * ph;
+  const x = i => n === 1 ? m.l + pw / 2 : m.l + i / (n - 1) * pw;
+  yGrid(svg, m, W, ticks, y);
+
+  const pts = s => s.values.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`);
+  const first = series[0];
+  if (area) S('path', { d: `M${x(0)},${y(0)}L${pts(first).join('L')}L${x(n - 1)},${y(0)}Z`, fill: first.color, opacity: 0.1 }, svg);
+  for (const s of [...series].reverse()) {
+    S('path', { d: 'M' + pts(s).join('L'), fill: 'none', stroke: s.color, 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+  }
+  const surface = css('--surface');
+  for (const s of series) S('circle', { cx: x(n - 1), cy: y(s.values[n - 1]), r: 4, fill: s.color, stroke: surface, 'stroke-width': 2 }, svg);
+  const lastV = first.values[n - 1];
+  if (endLabel) T(svg, x(n - 1) - 8, y(lastV) - 10, valueFmt(lastV), { 'text-anchor': 'end', fill: css('--text-2'), 'font-weight': 600 });
+  xLabels(svg, labels, x, m, W, H);
+
+  const cross = S('line', { y1: m.t, y2: m.t + ph, stroke: css('--axis'), 'stroke-width': 1, opacity: 0 }, svg);
+  const dots = series.map(s => S('circle', { r: 4, fill: s.color, stroke: surface, 'stroke-width': 2, opacity: 0 }, svg));
+  const hit = S('rect', { x: m.l - 6, y: m.t, width: pw + 12, height: ph, fill: 'transparent' }, svg);
+  hit.addEventListener('pointermove', e => {
+    const bx = svg.getBoundingClientRect().left;
+    const i = n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round((e.clientX - bx - m.l) / pw * (n - 1))));
+    cross.setAttribute('x1', x(i) + 0.5); cross.setAttribute('x2', x(i) + 0.5); cross.setAttribute('opacity', 1);
+    series.forEach((s, j) => { dots[j].setAttribute('cx', x(i)); dots[j].setAttribute('cy', y(s.values[i])); dots[j].setAttribute('opacity', 1); });
+    const rows = series.map(s => ({ color: s.color, value: valueFmt(s.values[i]), label: s.name, v: s.values[i] }));
+    if (sortTip) rows.sort((a, b) => b.v - a.v);
+    showTip(e, tips[i], rows);
+  });
+  svg.addEventListener('pointerleave', () => { cross.setAttribute('opacity', 0); dots.forEach(d => d.setAttribute('opacity', 0)); });
+  return svg;
+}
+
+function heatChart(box, { rows, cols, cell, rowLabels, colLabel, maxCell, word }) {
+  const W = Math.max(280, box.clientWidth), gap = 3, lw = 26, th = 18;
+  const size = Math.max(6, Math.min(maxCell, Math.floor((W - lw) / cols) - gap));
+  const H = th + rows * (size + gap) + 34;
+  const svg = newSvg(box, W, H);
+  const cells = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) { const v = cell(r, c); if (v) cells.push({ r, c, ...v }); }
+  const nz = cells.map(c => c.v).filter(v => v > 0).sort((a, b) => a - b);
+  const qs = [0.2, 0.4, 0.6, 0.8].map(p => nz[Math.floor(p * (nz.length - 1))] ?? 0);
+  const colors = [0, 1, 2, 3, 4, 5].map(i => css('--heat-' + i));
+  const bin = v => v <= 0 ? 0 : 1 + qs.filter(t => v > t).length;
+  rowLabels.forEach((l, r) => l && T(svg, 0, th + r * (size + gap) + size / 2 + 4, l));
+  for (let c = 0; c < cols; c++) { const l = colLabel(c); if (l) T(svg, lw + c * (size + gap), 12, l); }
+  for (const it of cells) {
+    const rect = S('rect', { x: lw + it.c * (size + gap), y: th + it.r * (size + gap), width: size, height: size,
+                             rx: Math.min(3, size / 4), fill: colors[bin(it.v)] }, svg);
+    rect.addEventListener('pointermove', e => {
+      rect.setAttribute('stroke', css('--text-2')); rect.setAttribute('stroke-width', 1);
+      showTip(e, it.title, [{ value: fmt(it.v), label: plural(it.v, word) }]);
+    });
+    rect.addEventListener('pointerleave', () => rect.removeAttribute('stroke'));
+  }
+  const ly = H - 14;
+  const t0 = T(svg, lw, ly + 9, 'меньше');
+  let lx = lw + t0.getComputedTextLength() + 8;
+  colors.forEach(c => { S('rect', { x: lx, y: ly, width: 11, height: 11, rx: 2, fill: c }, svg); lx += 14; });
+  T(svg, lx + 4, ly + 9, 'больше');
+  return svg;
+}
+
+function compareChart(box, people, metrics) {
+  const W = Math.max(280, box.clientWidth);
+  const perRow = W >= 900 ? metrics.length : W >= 560 ? 2 : 1;
+  const lw = Math.min(170, Math.max(96, Math.round(W * 0.16)));
+  const gapX = 18, rowH = 28, barH = 14, headH = 24, groupGap = 18;
+  const pw = (W - lw - gapX * (perRow - 1)) / perRow;
+  const groups = Math.ceil(metrics.length / perRow);
+  const groupH = headH + people.length * rowH;
+  const H = groups * groupH + (groups - 1) * groupGap + 4;
+  const svg = newSvg(box, W, H);
+  const text2 = css('--text-2'), text1 = css('--text'), hover = css('--hover');
+  for (let g = 0; g < groups; g++) {
+    const gy = g * (groupH + groupGap);
+    people.forEach((p, k) => {
+      const yy = gy + headH + k * rowH;
+      const maxChars = Math.floor((lw - 24) / 6.8);
+      S('rect', { x: 0, y: yy + (rowH - 10) / 2, width: 10, height: 10, rx: 3, fill: p.color }, svg);
+      T(svg, 16, yy + rowH / 2 + 4, p.name.length > maxChars ? p.name.slice(0, maxChars - 1) + '…' : p.name,
+        { fill: text1, 'font-size': 12.5, 'font-weight': k === 0 ? 600 : 400 });
+    });
+    metrics.slice(g * perRow, (g + 1) * perRow).forEach((mt, j) => {
+      const x0 = lw + j * (pw + gapX);
+      T(svg, x0, gy + 14, mt.title, { fill: css('--muted'), 'font-size': 12 });
+      const vals = people.map(p => p.v[mt.key]);
+      const max = Math.max(1, ...vals), total = vals.reduce((a, b) => a + b, 0);
+      const span = Math.max(20, pw - 62);
+      people.forEach((p, k) => {
+        const yy = gy + headH + k * rowH, v = p.v[mt.key];
+        const hl = S('rect', { x: x0 - 4, y: yy, width: pw + 8, height: rowH, rx: 6, fill: hover, opacity: 0 }, svg);
+        const len = v > 0 ? Math.max(2, v / max * span) : 0;
+        if (len) S('path', { d: barPath(x0, yy + (rowH - barH) / 2, len, barH, 'right'), fill: p.color }, svg);
+        T(svg, x0 + len + 6, yy + rowH / 2 + 4, mt.fmt(v),
+          { fill: v === max && v > 0 ? text1 : text2, 'font-weight': v === max && v > 0 ? 650 : 400, 'font-variant-numeric': 'tabular-nums' });
+        const hit = S('rect', { x: x0 - 4, y: yy, width: pw + 8, height: rowH, fill: 'transparent' }, svg);
+        hit.addEventListener('pointermove', e => {
+          hl.setAttribute('opacity', 1);
+          showTip(e, `${p.name} · ${mt.title.toLowerCase()}`, [
+            { color: p.color, value: mt.fmt(v), label: total ? `${Math.round(v / total * 100)}% от всех выбранных` : '' }]);
+        });
+        hit.addEventListener('pointerleave', () => hl.setAttribute('opacity', 0));
+      });
+    });
+  }
+  return svg;
+}
+
+function hbarChart(box, items, { tipRows }) {
+  const W = Math.max(280, box.clientWidth), rowH = 28, barH = 14;
+  const lw = Math.min(190, Math.round(W * 0.36)), vw = 70;
+  const H = items.length * rowH + 4;
+  const svg = newSvg(box, W, H);
+  const max = Math.max(1, ...items.map(i => i.value));
+  const span = W - lw - vw;
+  items.forEach((it, k) => {
+    const yy = k * rowH;
+    const hl = S('rect', { x: 0, y: yy, width: W, height: rowH, rx: 6, fill: css('--hover'), opacity: 0 }, svg);
+    const maxChars = Math.floor((lw - 12) / 6.8);
+    const name = it.label.length > maxChars ? it.label.slice(0, maxChars - 1) + '…' : it.label;
+    T(svg, 6, yy + rowH / 2 + 4, name, { fill: css('--text-2'), 'font-size': 12.5 });
+    const len = Math.max(2, it.value / max * span);
+    S('path', { d: barPath(lw, yy + (rowH - barH) / 2, len, barH, 'right'), fill: it.color }, svg);
+    T(svg, lw + len + 6, yy + rowH / 2 + 4, it.valueText ?? compact(it.value), { fill: css('--text-2'), 'font-variant-numeric': 'tabular-nums' });
+    const hit = S('rect', { x: 0, y: yy, width: W, height: rowH, fill: 'transparent' }, svg);
+    hit.addEventListener('pointermove', e => { hl.setAttribute('opacity', 1); showTip(e, it.label, tipRows(it)); });
+    hit.addEventListener('pointerleave', () => hl.setAttribute('opacity', 0));
+  });
+  return svg;
+}
+
+/* ---------- карточки ---------- */
+const CARDS = {};
+function card(id, title, { wide = false, png = true, modes = null } = {}) {
+  const el = document.createElement('article');
+  el.className = 'card' + (wide ? ' wide' : '');
+  el.innerHTML = `<header><div><h2></h2><p class="sub"></p></div><div class="tools">
+      <span class="modes"></span>
+      <button data-act="table" aria-pressed="false">Таблица</button>${png ? '<button data-act="png">PNG</button>' : ''}</div></header>
+    <div class="chart"></div><div class="tablewrap" hidden></div>`;
+  $('h2', el).textContent = title;
+  $('#grid').appendChild(el);
+  const c = CARDS[id] = { el, title, chart: $('.chart', el), tableBox: $('.tablewrap', el), table: null, showTable: false,
+                          mode: modes?.[0][0] };
+  if (modes) {
+    const box = $('.modes', el);
+    for (const [key, label] of modes) {
+      const b = document.createElement('button');
+      b.textContent = label; b.dataset.mode = key; b.setAttribute('aria-pressed', key === c.mode);
+      b.addEventListener('click', () => {
+        c.mode = key;
+        box.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.mode === key));
+        renderCharts();
+      });
+      box.appendChild(b);
+    }
+  }
+  el.querySelector('[data-act=table]').addEventListener('click', e => {
+    c.showTable = !c.showTable;
+    e.currentTarget.setAttribute('aria-pressed', c.showTable);
+    syncTable(c);
+  });
+  el.querySelector('[data-act=png]')?.addEventListener('click', () => {
+    const svg = $('svg', c.chart);
+    if (svg) exportPng(svg, c.title, $('.sub', el).textContent, `${id}`);
+  });
+  if (!png) { c.showTable = true; el.querySelector('[data-act=table]').hidden = true; }
+  return c;
+}
+function syncTable(c) {
+  c.chart.hidden = c.showTable && !!c.table;
+  c.tableBox.hidden = !c.showTable || !c.table;
+  if (c.showTable && c.table) {
+    const t = document.createElement('table');
+    const tr = document.createElement('tr');
+    c.table.head.forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (c.table.num?.[i]) th.className = 'n'; tr.appendChild(th); });
+    const thead = document.createElement('thead'); thead.appendChild(tr); t.appendChild(thead);
+    const tb = document.createElement('tbody');
+    for (const row of c.table.rows) {
+      const r = document.createElement('tr');
+      row.forEach((v, i) => {
+        const td = document.createElement('td'); td.textContent = v;
+        const cls = c.table.cls?.[i]; if (cls) td.className = typeof cls === 'function' ? cls(v) : cls;
+        r.appendChild(td);
+      });
+      tb.appendChild(r);
+    }
+    t.appendChild(tb);
+    c.tableBox.replaceChildren(t);
+  }
+}
+function setCard(id, sub, draw, table) {
+  const c = CARDS[id];
+  $('.sub', c.el).textContent = sub;
+  c.table = table;
+  if (draw) draw(c.chart); else c.chart.replaceChildren();
+  syncTable(c);
+}
+function emptyChart(box, text = 'Нет коммитов за этот период') {
+  const d = document.createElement('div'); d.className = 'empty'; d.textContent = text; box.replaceChildren(d);
+}
+
+function buildCards() {
+  card('compare', 'Сравнение авторов', { wide: true });
+  card('race', 'Кто сколько успел', { wide: true, modes: [['commits', 'Коммиты'], ['add', 'Строки']] });
+  card('commits', 'Коммиты', { wide: true });
+  card('lines', 'Строки: добавлено и удалено', { wide: true });
+  card('growth', 'Рост кода нарастающим итогом');
+  card('punch', 'Когда коммитят');
+  card('calendar', 'Календарь активности', { wide: true });
+  card('langs', 'Языки');
+  card('dirs', 'Где больше всего кода');
+  card('top', 'Самые большие коммиты', { wide: true, png: false });
+}
+
+const authorColor = name => DATA.slot.has(name) ? css('--s' + (DATA.slot.get(name) + 1)) : css('--other');
+
+function renderCharts() {
+  if (!LAST) return;
+  const { list, r, g } = LAST;
+  const keys = buckets(r, g), at = new Map(keys.map((k, i) => [k, i]));
+  const labels = keys.map((k, i) => bucketLabel(k, g, i, keys));
+  const tips = keys.map(k => bucketTip(k, g));
+  const period = r.start === r.end ? dayFull(r.start) : `${dayFull(r.start)} — ${dayFull(r.end)}`;
+  const empty = list.length === 0;
+
+  // Коммиты: стопкой по авторам, если их несколько
+  const byAuthor = new Map();
+  for (const c of list) {
+    const key = DATA.slot.has(c.name) ? c.name : 'Другие';
+    if (!byAuthor.has(key)) byAuthor.set(key, Array(keys.length).fill(0));
+    byAuthor.get(key)[at.get(bucketOf(c.day, g))]++;
+  }
+  const order = [...byAuthor.keys()].sort((a, b) => (DATA.slot.get(a) ?? 99) - (DATA.slot.get(b) ?? 99));
+  const commitSeries = order.map(name => ({ name, values: byAuthor.get(name), sign: 1, color: authorColor(name) }));
+  const total = keys.map((_, i) => commitSeries.reduce((s, x) => s + x.values[i], 0));
+  setCard('commits', `${GRAN_WORD[g]} · ${period}`,
+    empty ? b => emptyChart(b) : b => columnChart(b, { labels, tips, series: commitSeries }),
+    { head: ['Период', ...order, ...(order.length > 1 ? ['Всего'] : [])], num: [0, ...order.map(() => 1), 1],
+      rows: keys.map((k, i) => [tips[i], ...commitSeries.map(s => fmt(s.values[i])), ...(order.length > 1 ? [fmt(total[i])] : [])]), cls: [null, ...order.map(() => 'n'), 'n'] });
+
+  // Строки
+  const add = Array(keys.length).fill(0), del = Array(keys.length).fill(0);
+  for (const c of list) { const i = at.get(bucketOf(c.day, g)); add[i] += c.add; del[i] += c.del; }
+  const lineSeries = [
+    { name: 'Добавлено', values: add, sign: 1, color: css('--added') },
+    { name: 'Удалено', values: del, sign: -1, color: css('--deleted') },
+  ];
+  setCard('lines', `${GRAN_WORD[g]} · ${{ all: 'без исключённых файлов', code: 'только код', docs: 'только документация' }[state.kind]}`,
+    empty ? b => emptyChart(b) : b => columnChart(b, { labels, tips, series: lineSeries }),
+    { head: ['Период', 'Добавлено', 'Удалено', 'Итог'], cls: [null, 'n plus', 'n minus', 'n'], num: [0, 1, 1, 1],
+      rows: keys.map((k, i) => [tips[i], '+' + fmt(add[i]), '−' + fmt(del[i]), signed(add[i] - del[i])]) });
+
+  // Рост
+  let ca = 0, cn = 0;
+  const cumAdd = [], cumNet = [];
+  keys.forEach((_, i) => { ca += add[i]; cn += add[i] - del[i]; cumAdd.push(ca); cumNet.push(cn); });
+  setCard('growth', 'сколько строк прибавилось с начала периода',
+    empty ? b => emptyChart(b) : b => lineChart(b, { labels, tips, series: [
+      { name: 'Чистый прирост', values: cumNet, color: css('--s1') },
+      { name: 'Всего написано', values: cumAdd, color: css('--added') },
+    ] }),
+    { head: ['Период', 'Всего написано', 'Чистый прирост'], num: [0, 1, 1], cls: [null, 'n', 'n'],
+      rows: keys.map((k, i) => [tips[i], fmt(cumAdd[i]), signed(cumNet[i])]) });
+
+  // Часы × дни недели (по местному времени автора)
+  const punch = Array.from({ length: 7 }, () => Array(24).fill(0));
+  for (const c of list) punch[c.dow][c.hour]++;
+  setCard('punch', 'день недели × час, по часам автора',
+    empty ? b => emptyChart(b) : b => heatChart(b, { rows: 7, cols: 24, maxCell: 24, rowLabels: DOW, word: ['коммит', 'коммита', 'коммитов'],
+      colLabel: c => c % 3 === 0 ? String(c) : null,
+      cell: (rr, cc) => ({ v: punch[rr][cc], title: `${DOW[rr]}, ${pad2(cc)}:00–${pad2(cc)}:59` }) }),
+    { head: ['День', ...Array.from({ length: 24 }, (_, h) => String(h))], num: [0, ...Array(24).fill(1)],
+      rows: punch.map((row, d) => [DOW[d], ...row.map(String)]), cls: [null, ...Array(24).fill('n')] });
+
+  // Календарь: последние 53 недели периода
+  const perDay = new Map();
+  for (const c of list) perDay.set(c.day, (perDay.get(c.day) || 0) + 1);
+  const calStart = r.start > addDays(r.end, -370) ? r.start : addDays(r.end, -370);
+  const gridStart = weekStart(calStart), weeks = Math.ceil((daysBetween(gridStart, r.end) + 1) / 7);
+  setCard('calendar', `коммиты по дням · ${dayFull(calStart)} — ${dayFull(r.end)}`,
+    empty ? b => emptyChart(b) : b => heatChart(b, { rows: 7, cols: weeks, maxCell: 20, rowLabels: ['Пн', '', 'Ср', '', 'Пт', '', ''],
+      word: ['коммит', 'коммита', 'коммитов'],
+      // Подпись месяца — на неделе, где он начинается; первая неделя подписывается, только если до смены месяца далеко
+      colLabel: c => { const d = addDays(gridStart, c * 7 + 6), p = addDays(d, -7);
+        const starts = c === 0 ? +addDays(gridStart, 6 + 14).slice(5, 7) === +d.slice(5, 7) : d.slice(5, 7) !== p.slice(5, 7);
+        return starts && c < weeks - 2 ? MONTHS[+d.slice(5, 7) - 1] : null; },
+      cell: (rr, cc) => { const d = addDays(gridStart, cc * 7 + rr);
+        return d < calStart || d > r.end ? null : { v: perDay.get(d) || 0, title: `${DOW[rr]}, ${dayFull(d)}` }; } }),
+    { head: ['День', 'Коммитов'], num: [0, 1], cls: [null, 'n'],
+      rows: [...perDay].sort((a, b) => b[0].localeCompare(a[0])).map(([d, n]) => [dayFull(d), fmt(n)]) });
+
+  // Сравнение авторов
+  const aStat = new Map();
+  for (const c of list) {
+    const st = aStat.get(c.name) || { commits: 0, add: 0, del: 0, code: 0, docs: 0, ai: 0, days: new Set(), sizes: [], first: c.day, last: c.day };
+    st.commits++; st.add += c.add; st.del += c.del; st.code += c.codeAdd; st.docs += c.docsAdd; if (c.ai) st.ai++;
+    st.days.add(c.day); st.sizes.push(c.add + c.del);
+    if (c.day < st.first) st.first = c.day;
+    if (c.day > st.last) st.last = c.day;
+    aStat.set(c.name, st);
+  }
+  const median = xs => { const v = [...xs].sort((x, y) => x - y); return v.length ? v[Math.floor((v.length - 1) / 2)] : 0; };
+  const people = [...aStat].sort((x, y) => y[1].commits - x[1].commits).slice(0, 12).map(([name, st]) => ({
+    name, color: authorColor(name),
+    v: { commits: st.commits, add: st.add, del: st.del, days: st.days.size, size: median(st.sizes) },
+  }));
+  const several = aStat.size >= 2;
+  CARDS.compare.el.hidden = !several;
+  CARDS.race.el.hidden = !several;
+  const linesWord = { all: 'строк', code: 'строк кода', docs: 'строк доков' }[state.kind];
+  if (several) {
+    setCard('compare', `${period}${aStat.size > 12 ? ` · первые 12 из ${aStat.size}` : ''}`,
+      b => compareChart(b, people, [
+        { key: 'commits', title: 'Коммиты', fmt },
+        { key: 'add', title: `Добавлено ${linesWord}`, fmt: v => '+' + compact(v) },
+        { key: 'del', title: `Удалено ${linesWord}`, fmt: v => '−' + compact(v) },
+        { key: 'days', title: 'Активные дни', fmt },
+        { key: 'size', title: 'Типичный коммит, строк', fmt: v => compact(v) },
+      ]),
+      { head: ['Автор', 'Коммиты', 'Добавлено', 'Удалено', 'Код +', 'Доки +', 'Дней', 'Типичный коммит', 'С ИИ', 'Первый', 'Последний'],
+        num: [0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0], cls: [null, 'n', 'n plus', 'n minus', 'n', 'n', 'n', 'n', 'n', null, null],
+        rows: [...aStat].sort((x, y) => y[1].commits - x[1].commits).map(([n, st]) => [n, fmt(st.commits), '+' + fmt(st.add), '−' + fmt(st.del),
+          fmt(st.code), fmt(st.docs), fmt(st.days.size), fmt(median(st.sizes)), Math.round(st.ai / st.commits * 100) + '%', dayFull(st.first), dayFull(st.last)]) });
+
+    // Гонка: нарастающий итог по каждому автору
+    const mode = CARDS.race.mode;
+    const raceSeries = people.filter(p => DATA.slot.has(p.name)).map(p => ({ name: p.name, color: p.color, values: Array(keys.length).fill(0) }));
+    const idx = new Map(raceSeries.map((x, i) => [x.name, i]));
+    for (const c of list) {
+      const j = idx.get(c.name); if (j === undefined) continue;
+      raceSeries[j].values[at.get(bucketOf(c.day, g))] += mode === 'commits' ? 1 : c.add;
+    }
+    for (const x of raceSeries) { let acc = 0; x.values = x.values.map(v => (acc += v)); }
+    setCard('race', mode === 'commits' ? 'коммиты нарастающим итогом' : `добавлено ${linesWord} нарастающим итогом`,
+      b => lineChart(b, { labels, tips, series: raceSeries, area: false, endLabel: false, sortTip: true, valueFmt: fmt }),
+      { head: ['Период', ...raceSeries.map(x => x.name)], num: [0, ...raceSeries.map(() => 1)], cls: [null, ...raceSeries.map(() => 'n')],
+        rows: keys.map((k, i) => [tips[i], ...raceSeries.map(x => fmt(x.values[i]))]) });
+  }
+
+  // Языки и папки — по добавленным строкам
+  const byLang = new Map(), byDir = new Map();
+  for (const c of list) for (const [i, a, d] of c.files) {
+    if (DATA.mask[i]) continue;
+    const p = DATA.paths[i];
+    for (const [map, key] of [[byLang, langOf(p)], [byDir, dirOf(p)]]) {
+      const s = map.get(key) || { add: 0, del: 0, files: new Set() };
+      s.add += a; s.del += d; s.files.add(i); map.set(key, s);
+    }
+  }
+  const topItems = (map, n) => {
+    const all = [...map].sort((a, b) => b[1].add - a[1].add);
+    const items = all.slice(0, n).map(([k, s]) => ({ label: k, value: s.add, s, color: css('--s1') }));
+    if (all.length > n) {
+      const rest = all.slice(n).reduce((acc, [, s]) => ({ add: acc.add + s.add, del: acc.del + s.del, files: { size: acc.files.size + s.files.size } }), { add: 0, del: 0, files: { size: 0 } });
+      items.push({ label: `остальное (${all.length - n})`, value: rest.add, s: rest, color: css('--other') });
+    }
+    return items.filter(i => i.value > 0);
+  };
+  const tipRows = it => [{ value: '+' + fmt(it.s.add), label: 'строк добавлено' }, { value: '−' + fmt(it.s.del), label: 'удалено' },
+                         { value: fmt(it.s.files.size), label: plural(it.s.files.size, ['файл', 'файла', 'файлов']) }];
+  const tableOf = (map, title) => ({ head: [title, 'Добавлено', 'Удалено', 'Файлов'], num: [0, 1, 1, 1], cls: [null, 'n plus', 'n minus', 'n'],
+    rows: [...map].sort((a, b) => b[1].add - a[1].add).map(([k, s]) => [k, '+' + fmt(s.add), '−' + fmt(s.del), fmt(s.files.size)]) });
+  const langItems = topItems(byLang, 8), dirItems = topItems(byDir, 10);
+  setCard('langs', 'добавленные строки по расширению файла',
+    langItems.length ? b => hbarChart(b, langItems, { tipRows }) : b => emptyChart(b), tableOf(byLang, 'Язык'));
+  setCard('dirs', 'добавленные строки по папкам',
+    dirItems.length ? b => hbarChart(b, dirItems, { tipRows }) : b => emptyChart(b), tableOf(byDir, 'Папка'));
+
+  // Самые большие коммиты
+  const big = [...list].sort((a, b) => b.add - a.add).slice(0, 15);
+  setCard('top', 'по добавленным строкам, без исключённых файлов', null,
+    { head: ['Дата', 'Коммит', 'Автор', '+', '−', ''], cls: ['n', 'subj', null, 'n plus', 'n minus', 'hash'], num: [0, 0, 0, 1, 1, 0],
+      rows: big.map(c => [dayShort(c.day) + ' ' + c.day.slice(2, 4), c.subj, c.name, '+' + fmt(c.add), '−' + fmt(c.del), c.h.slice(0, 7)]) });
+  if (empty) emptyChart(CARDS.top.tableBox);
+}
+
+function langOf(p) {
+  const b = p.slice(p.lastIndexOf('/') + 1).toLowerCase();
+  if (b.startsWith('dockerfile')) return 'Docker';
+  if (b === 'makefile') return 'Make';
+  const i = b.lastIndexOf('.');
+  if (i <= 0) return 'без расширения';
+  const e = b.slice(i + 1);
+  return LANG[e] || '.' + e;
+}
+function dirOf(p) {
+  const s = p.split('/');
+  if (s.length === 1) return '(корень)';
+  if (s.length === 2) return s[0] + '/';
+  return s[0] + '/' + s[1] + '/';
+}
+
+/* ---------- показатели ---------- */
+function renderKpis(cur, prev) {
+  const box = $('#kpis');
+  box.replaceChildren();
+  const len = cur.span;
+  const vs = `к пред. ${len} ${plural(len, ['дню', 'дням', 'дням'])}`;
+  const delta = (a, b) => {
+    if (!prev) return null;
+    if (b === 0) return a === 0 ? { text: `как ${vs}`, cls: '' } : { text: `▲ раньше было 0`, cls: 'up' };
+    const p = Math.round((a - b) / b * 100);
+    return { text: `${p > 0 ? '▲' : p < 0 ? '▼' : '='} ${Math.abs(p)}% ${vs}`, cls: p > 0 ? 'up' : p < 0 ? 'down' : '' };
+  };
+  const tiles = [
+    { lb: 'Коммиты', vl: fmt(cur.commits), dl: delta(cur.commits, prev?.commits),
+      sb: cur.days ? `≈ ${(cur.commits / cur.days).toFixed(1).replace('.', ',')} в активный день` : '' },
+    { lb: 'Добавлено строк', vl: '+' + fmt(cur.add), dl: delta(cur.add, prev?.add),
+      sb: cur.exAdd ? `ещё ${compact(cur.exAdd)} в исключённых файлах` : 'исключённых файлов не было' },
+    { lb: 'Удалено строк', vl: '−' + fmt(cur.del), dl: delta(cur.del, prev?.del), sb: `итог ${signed(cur.net)}` },
+    { lb: 'Активные дни', vl: `${fmt(cur.days)}`, dl: delta(cur.days, prev?.days),
+      sb: `из ${fmt(cur.span)} — ${Math.round(cur.days / cur.span * 100)}%` },
+    { lb: 'Лучшая серия', vl: `${cur.best} ${plural(cur.best, ['день', 'дня', 'дней'])}`, dl: null,
+      sb: cur.current ? `сейчас идёт ${cur.current} ${plural(cur.current, ['день', 'дня', 'дней'])} подряд` : 'дней подряд с коммитами' },
+    { lb: 'С ИИ-соавтором', vl: cur.commits ? Math.round(cur.ai / cur.commits * 100) + '%' : '—', dl: null,
+      sb: `${fmt(cur.ai)} из ${fmt(cur.commits)} ${plural(cur.commits, ['коммита', 'коммитов', 'коммитов'])}` },
+    { lb: 'Файлов затронуто', vl: fmt(cur.files), dl: null, sb: `≈ ${compact(cur.files ? cur.add / cur.files : 0)} строк на файл` },
+  ];
+  for (const t of tiles) {
+    const el = document.createElement('div'); el.className = 'tile';
+    for (const [cls, text] of [['lb', t.lb], ['vl', t.vl]]) { const d = document.createElement('div'); d.className = cls; d.textContent = text; el.appendChild(d); }
+    if (t.dl) { const d = document.createElement('div'); d.className = 'dl ' + t.dl.cls; d.textContent = t.dl.text; el.appendChild(d); }
+    if (t.sb) { const d = document.createElement('div'); d.className = 'sb'; d.textContent = t.sb; el.appendChild(d); }
+    box.appendChild(el);
+  }
+}
+
+/* ---------- сборка ---------- */
+function render() {
+  if (!DATA) return;
+  assignSlots();
+  const r = currentRange(), g = granularity(r);
+  const list = select(r);
+  let prev = null;
+  if (PRESET_DAYS[state.preset] || state.preset === 'custom') {
+    const len = daysBetween(r.start, r.end) + 1;
+    const pr = { start: addDays(r.start, -len), end: addDays(r.start, -1) };
+    prev = stats(select(pr), pr);
+  }
+  const cur = stats(list, r);
+  LAST = { list, r, g, cur };
+  renderKpis(cur, prev);
+  renderCharts();
+  syncControls();
+  saveState();
+}
+
+function syncControls() {
+  for (const b of $('#presets').children) b.setAttribute('aria-pressed', b.dataset.p === state.preset);
+  $('#customRange').hidden = state.preset !== 'custom';
+  if (DATA && state.preset === 'custom') {
+    const r = currentRange();
+    $('#from').value = r.start; $('#to').value = r.end;
+  }
+  $('#gran').value = state.gran;
+  $('#merges').checked = state.merges;
+  $('#bots').checked = state.bots;
+  $('#kind').value = state.kind;
+  $('#authorsBtn').textContent = !state.authors.length ? 'Все'
+    : state.authors.length === 1 ? state.authors[0] : `${state.authors.length} ${plural(state.authors.length, ['автор', 'автора', 'авторов'])}`;
+  const nEx = state.excludes.split('\n').filter(s => s.trim() && !s.trim().startsWith('#')).length;
+  $('#excludeBtn').textContent = nEx ? `Исключено шаблонов: ${nEx}` : 'Всё считается';
+}
+
+function fillAuthors() {
+  const box = $('#authorsList'), scroll = box.scrollTop;
+  const needle = $('#authorsSearch').value.trim().toLowerCase();
+  box.replaceChildren();
+  const chosen = new Set(state.authors);
+  // выбранные — сверху, боты — только если включены
+  const list = [...DATA.authors.filter(a => chosen.has(a.name)), ...DATA.authors.filter(a => !chosen.has(a.name) && (state.bots || !a.bot))]
+    .filter(a => !needle || [...a.aliases].some(x => x.toLowerCase().includes(needle)));
+  for (const a of list.slice(0, 300)) {
+    const row = document.createElement('label'); row.className = 'row';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = chosen.has(a.name);
+    const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = authorColor(a.name);
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = a.name;
+    const others = [...a.aliases].filter(x => !x.startsWith(a.name + ' <'));
+    if (a.aliases.size > 1) {
+      const al = document.createElement('span'); al.className = 'al';
+      al.textContent = `${a.aliases.size} ${plural(a.aliases.size, ['подпись', 'подписи', 'подписей'])}${others.length ? ': ' + others.map(x => x.split(' <')[0]).filter((v, i, xs) => xs.indexOf(v) === i).join(', ') : ''}`;
+      nm.appendChild(al);
+    }
+    row.title = [...a.aliases].join('\n');
+    const ct = document.createElement('span'); ct.className = 'ct'; ct.textContent = fmt(a.n);
+    cb.addEventListener('change', () => {
+      state.authors = cb.checked ? [...state.authors, a.name] : state.authors.filter(x => x !== a.name);
+      render(); fillAuthors();
+    });
+    row.append(cb, dot, nm, ct);
+    box.appendChild(row);
+  }
+  if (list.length > 300) { const more = document.createElement('div'); more.className = 'hint'; more.textContent = `ещё ${list.length - 300} — уточни поиск`; box.appendChild(more); }
+  box.scrollTop = scroll;
+}
+
+function fillRevs(meta) {
+  const opt = (sel, value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; sel.appendChild(o); };
+  const rev = $('#rev'), base = $('#base');
+  rev.replaceChildren(); base.replaceChildren();
+  opt(rev, 'HEAD', `текущая${meta.current && meta.current !== 'HEAD' ? ` (${meta.current})` : ''}`);
+  opt(rev, '--all', 'все ветки');
+  opt(base, '', '— ничего не вычитать');
+  for (const b of meta.branches) { if (b !== meta.current) opt(rev, b, b); opt(base, b, b); }
+  rev.value = [...rev.options].some(o => o.value === state.rev) ? state.rev : 'HEAD';
+  if (state.base && ![...base.options].some(o => o.value === state.base)) opt(base, state.base, state.base);
+  base.value = state.base;
+}
+
+// Новый репозиторий: его настройки из repos.json, если их не задал адрес, затем загрузка
+async function openRepo(path, { fromUrl = false } = {}) {
+  setStatus('Открываю репозиторий…');
+  let meta;
+  try { meta = await api(`/api/meta?repo=${q(path)}`); }
+  catch (e) { setStatus(e.message, true); return; }
+  const cfg = meta.config || {};
+  state.repo = meta.path;
+  if (!fromUrl) { state.rev = 'HEAD'; state.base = cfg.base || ''; state.authors = cfg.authors || []; }
+  else {
+    if (!state.fromUrl.base) state.base = cfg.base || '';
+    if (!state.fromUrl.authors) state.authors = cfg.authors || [];
+  }
+  state.repoDefaults = cfg.excludes ? cfg.excludes.join('\n') : DEFAULT_EXCLUDES;
+  state.excludes = store.get(excludesKey(state.repo)) ?? state.repoDefaults;
+  fillRevs(meta);
+  await refresh();
+}
+
+async function fillRepos(cfg) {
+  const sel = $('#repo');
+  const opt = (value, text) => { const o = document.createElement('option'); o.value = value; o.textContent = text; return o; };
+  const put = repos => {
+    sel.replaceChildren();
+    const seen = new Set();
+    if (state.repo) { sel.appendChild(opt(state.repo, state.repo.split('/').pop())); seen.add(state.repo); }
+    for (const r of repos) if (!seen.has(r.path)) { sel.appendChild(opt(r.path, r.name)); seen.add(r.path); }
+    sel.appendChild(opt('__other', 'Другая папка…'));
+    sel.value = state.repo || '__other';
+  };
+  put([]);
+  try { put(await api('/api/repos')); } catch {}
+}
+
+let refreshing = false;
+async function refresh() {
+  if (!state.repo || refreshing) return;
+  refreshing = true;
+  const btn = $('#refresh');
+  btn.disabled = true; btn.classList.add('busy');
+  $('#main').classList.add('loading');
+  setStatus('Читаю историю git…');
+  try {
+    const raw = await api(`/api/log?repo=${q(state.repo)}&rev=${q(state.rev)}&base=${q(state.base)}`);
+    state.repo = raw.repo.path;
+    prepare(raw);
+    fillRevs(raw.repo);
+    fillAuthors();
+    $('#title').textContent = raw.repo.name;
+    $('#repoPath').textContent = raw.repo.path;
+    document.title = `${raw.repo.name} — git-статистика`;
+    render();
+    const t = new Date();
+    const revName = state.rev === 'HEAD' ? (raw.repo.current || 'HEAD') : state.rev === '--all' ? 'все ветки' : state.rev;
+    const merged = DATA.authors.filter(a => a.aliases.size > 1).length;
+    setStatus(`Обновлено в ${pad2(t.getHours())}:${pad2(t.getMinutes())} · ${revName}${state.base ? ` минус ${state.base}` : ''} · `
+      + `${fmt(raw.commits.length)} ${plural(raw.commits.length, ['коммит', 'коммита', 'коммитов'])} · `
+      + `${fmt(DATA.authors.length)} ${plural(DATA.authors.length, ['автор', 'автора', 'авторов'])}`
+      + (merged ? ` (у ${merged} — несколько подписей, склеены)` : ''));
+  } catch (e) {
+    setStatus(e.message, true);
+  } finally {
+    refreshing = false;
+    btn.disabled = false; btn.classList.remove('busy');
+    $('#main').classList.remove('loading');
+  }
+}
+function setStatus(text, err = false) { const s = $('#status'); s.textContent = text; s.classList.toggle('err', err); }
+
+/* ---------- PNG ---------- */
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function rasterize(svg, w, h, name) {
+  const xml = new XMLSerializer().serializeToString(svg);
+  const img = new Image();
+  img.onload = () => {
+    const k = 2, cv = document.createElement('canvas');
+    cv.width = w * k; cv.height = h * k;
+    const ctx = cv.getContext('2d'); ctx.scale(k, k); ctx.drawImage(img, 0, 0, w, h);
+    cv.toBlob(b => download(b, name), 'image/png');
+  };
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+}
+const slug = () => (DATA?.raw.repo.name || 'repo').replace(/[^\w.-]+/g, '_');
+function exportPng(chartSvg, title, subtitle, id) {
+  const w = +chartSvg.getAttribute('width'), h = +chartSvg.getAttribute('height');
+  const pad = 28, head = 70, foot = 30, W = w + pad * 2, H = h + head + foot + pad;
+  const svg = S('svg', { xmlns: NS, width: W, height: H, viewBox: `0 0 ${W} ${H}`, 'font-family': FONT });
+  S('rect', { width: W, height: H, rx: 16, fill: css('--surface') }, svg);
+  const t = S('text', { x: pad, y: pad + 20, fill: css('--text'), 'font-size': 20, 'font-weight': 650 }, svg); t.textContent = `${DATA.raw.repo.name}: ${title}`;
+  const s = S('text', { x: pad, y: pad + 42, fill: css('--muted'), 'font-size': 13 }, svg); s.textContent = subtitle + whoSuffix();
+  const inner = chartSvg.cloneNode(true);
+  inner.setAttribute('x', pad); inner.setAttribute('y', head + 8); inner.setAttribute('overflow', 'visible');
+  svg.appendChild(inner);
+  const f = S('text', { x: W - pad, y: H - 14, fill: css('--muted'), 'font-size': 11, 'text-anchor': 'end' }, svg);
+  f.textContent = `git-stats · ${dayFull(today())}`;
+  rasterize(svg, W, H, `${slug()}-${id}.png`);
+}
+const whoSuffix = () => state.authors.length ? ` · ${state.authors.join(', ')}` : '';
+
+function exportSummary() {
+  if (!LAST) return;
+  const { cur, r, list, g } = LAST;
+  const W = 1200, H = 630, pad = 64;
+  const svg = S('svg', { xmlns: NS, width: W, height: H, viewBox: `0 0 ${W} ${H}`, 'font-family': FONT });
+  S('rect', { width: W, height: H, fill: css('--surface') }, svg);
+  const txt = (x, y, s, a) => { const e = S('text', { x, y, ...a }, svg); e.textContent = s; return e; };
+  txt(pad, pad + 40, DATA.raw.repo.name, { fill: css('--text'), 'font-size': 48, 'font-weight': 700 });
+  txt(pad, pad + 80, `${dayFull(r.start)} — ${dayFull(r.end)}${whoSuffix()}`, { fill: css('--text-2'), 'font-size': 22 });
+  const big = [
+    [fmt(cur.commits), plural(cur.commits, ['коммит', 'коммита', 'коммитов']), css('--text')],
+    ['+' + compact(cur.add), 'строк добавлено', css('--up')],
+    ['−' + compact(cur.del), 'строк удалено', css('--down')],
+    [fmt(cur.days), plural(cur.days, ['активный день', 'активных дня', 'активных дней']), css('--text')],
+  ];
+  const cw = (W - pad * 2) / big.length;
+  const size = Math.min(64, ...big.map(([v]) => Math.floor((cw - 24) / (v.length * 0.6))));
+  big.forEach(([v, l, color], i) => {
+    txt(pad + i * cw, 300, v, { fill: color, 'font-size': size, 'font-weight': 700, 'letter-spacing': '-1' });
+    txt(pad + i * cw, 336, l, { fill: css('--text-2'), 'font-size': 20 });
+  });
+  // Полоса коммитов по периоду
+  const keys = buckets(r, g), at = new Map(keys.map((k, i) => [k, i]));
+  const vals = Array(keys.length).fill(0);
+  for (const c of list) vals[at.get(bucketOf(c.day, g))]++;
+  const max = Math.max(1, ...vals), top = 400, bh = 140, band = (W - pad * 2) / keys.length, bw = Math.max(1, Math.min(24, band * 0.7));
+  S('line', { x1: pad, x2: W - pad, y1: top + bh + 0.5, y2: top + bh + 0.5, stroke: css('--axis') }, svg);
+  vals.forEach((v, i) => {
+    if (!v) return;
+    const h = Math.max(2, v / max * bh);
+    S('path', { d: barPath(pad + band * i + (band - bw) / 2, top + bh - h, bw, h, 'top'), fill: css('--s1') }, svg);
+  });
+  txt(pad, H - 34, `коммиты ${GRAN_WORD[g]}`, { fill: css('--muted'), 'font-size': 16 });
+  txt(W - pad, H - 34, cur.ai ? `${Math.round(cur.ai / cur.commits * 100)}% коммитов с ИИ-соавтором` : `лучшая серия — ${cur.best} ${plural(cur.best, ['день', 'дня', 'дней'])}`,
+      { fill: css('--muted'), 'font-size': 16, 'text-anchor': 'end' });
+  rasterize(svg, W, H, `${slug()}-summary.png`);
+}
+
+/* ---------- тема ---------- */
+const THEMES = ['auto', 'dark', 'light'];
+function applyTheme(t) {
+  if (t === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  $('#theme').textContent = 'Тема: ' + { auto: 'авто', dark: 'тёмная', light: 'светлая' }[t];
+}
+
+/* ---------- события ---------- */
+function wire() {
+  let theme = store.get('gitstats.theme') || 'auto';
+  applyTheme(theme);
+  $('#theme').addEventListener('click', () => {
+    theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+    store.set('gitstats.theme', theme); applyTheme(theme);
+    if (DATA) { fillAuthors(); render(); }
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => DATA && render());
+  $('#refresh').addEventListener('click', refresh);
+  $('#summaryPng').addEventListener('click', exportSummary);
+  $('#presets').addEventListener('click', e => {
+    const p = e.target.closest('button')?.dataset.p; if (!p) return;
+    if (p === 'custom' && DATA) { const r = currentRange(); state.from = r.start; state.to = r.end; }
+    state.preset = p; render();
+  });
+  for (const id of ['from', 'to']) $('#' + id).addEventListener('change', e => { state[id] = e.target.value; render(); });
+  $('#gran').addEventListener('change', e => { state.gran = e.target.value; render(); });
+  $('#rev').addEventListener('change', e => { state.rev = e.target.value; refresh(); });
+  $('#base').addEventListener('change', e => { state.base = e.target.value; refresh(); });
+  $('#kind').addEventListener('change', e => { state.kind = e.target.value; if (DATA) { applyExcludes(); render(); } });
+  $('#bots').addEventListener('change', e => { state.bots = e.target.checked; if (DATA) { render(); fillAuthors(); } });
+  $('#authorsSearch').addEventListener('input', () => DATA && fillAuthors());
+  $('#repo').addEventListener('change', e => {
+    let path = e.target.value;
+    if (path === '__other') {
+      path = prompt('Путь к git-репозиторию', state.repo || '~/');
+      if (!path) { e.target.value = state.repo || '__other'; return; }
+      const sel = $('#repo'), o = document.createElement('option');
+      o.value = path; o.textContent = path.split('/').filter(Boolean).pop(); sel.prepend(o);
+    }
+    $('#repo').value = path;
+    openRepo(path);
+  });
+
+  const pops = [['#authorsBtn', '#authorsPop'], ['#excludeBtn', '#excludePop']];
+  for (const [b, p] of pops) $(b).addEventListener('click', e => {
+    e.stopPropagation();
+    const open = $(p).hidden;
+    pops.forEach(([, x]) => $(x).hidden = true);
+    $(p).hidden = !open;
+    if (p === '#excludePop' && open) $('#excludes').value = state.excludes;
+  });
+  document.addEventListener('click', e => { for (const [, p] of pops) if (!$(p).contains(e.target)) $(p).hidden = true; });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') pops.forEach(([, p]) => $(p).hidden = true); });
+  $('#authorsAll').addEventListener('click', () => { state.authors = []; render(); fillAuthors(); });
+  $('#authorsClose').addEventListener('click', () => $('#authorsPop').hidden = true);
+  $('#excludesApply').addEventListener('click', () => {
+    state.excludes = $('#excludes').value; $('#excludePop').hidden = true;
+    if (state.repo) store.set(excludesKey(state.repo), state.excludes);
+    if (DATA) { applyExcludes(); render(); } else syncControls();
+  });
+  $('#excludesReset').addEventListener('click', () => { $('#excludes').value = state.repoDefaults || DEFAULT_EXCLUDES; });
+  $('#merges').addEventListener('change', e => { state.merges = e.target.checked; render(); });
+
+  let t, lastW = 0;
+  new ResizeObserver(([e]) => {
+    const w = Math.round(e.contentRect.width);
+    if (w === lastW) return; lastW = w;
+    clearTimeout(t); t = setTimeout(() => renderCharts(), 120);
+  }).observe($('#grid'));
+}
+
+async function init() {
+  buildCards();
+  wire();
+  syncControls();
+  let cfg = { defaultRepo: null };
+  try { cfg = await api('/api/config'); } catch (e) { setStatus('Сервер не отвечает: ' + e.message, true); }
+  if (!state.repo) state.repo = cfg.defaultRepo;
+  fillRepos(cfg);
+  if (state.repo) openRepo(state.repo, { fromUrl: true });
+  else setStatus('Выберите репозиторий в списке слева.');
+}
+init();
+</script>
+</body>
+</html>
